@@ -97,7 +97,7 @@ opts_chunk$set(
   $$ EQ = \sum_{i = 1}^{n} (y_i - \hat f(x_i))^2 + \lambda \int \hat f''(x_i) dx$$
   
   
-```{r, fig.width=10, fig.align='right'}
+```{r, fig.width=10, out.extra = 'style = "margin:0 -200px"'}
 library(labestData)
 library(lattice)
 library(latticeExtra)
@@ -176,7 +176,8 @@ str(kfol)
 xyplot(cvt + cvval ~  l, groups = fold , data = kfol,
        auto.key = list(corner = c(0.95, 0.95)), 
        type = c("p", "g", "o"),
-       scales = "free")
+       scales = "free", 
+       xlab = expression(lambda))
 
 #-------------
 which.min(kfol$cvval)
@@ -215,11 +216,10 @@ nfol[585,] # lambda = 14
 
 xyplot(cvt + cvval ~  l, groups = fold , data = nfol,
        type = c("p", "g", "o"),
-       scales = "free")
-
+       scales = "free",
+       xlab = expression(lambda))
 
 ```
-
 
   - Conclusão: Percebemos, para ambos os métodos, uma estabilização
   do valor de $\lambda$ que pode ser observada com os gráficos sobre
