@@ -1,0 +1,206 @@
+---
+title: "Gradiente Descendente"
+author: "Bruna Wundervald"
+output:
+  rmarkdown::html_vignette:
+    fig_width: 5
+    fig_height: 3.5
+    fig_cap: TRUE
+    toc: yes
+---
+<style type="text/css">
+#TOC {
+  margin: 0 130px;
+  width: 425px;
+}
+</style>
+```{r setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+    dpi = 100,
+    fig.align = "center",
+    comment = NA,
+    message = FALSE,
+    warning = FALSE,
+    error = FALSE)
+```
+
+# Gradiente Descendente
+
+## Batch
+
+  - O método do Gradiente Descendente é utilizado basicamente para
+  encontrar o mínimo de uma função de forma iterativa, isto é:
+  
+  $$\beta^{(k+1)} = \beta^{(k)} + \alpha_k \nabla J (\beta^{(k)})$$
+  Onde $\alpha_k$ é o tamanho do *passo* utilizado no algoritmo e
+  $\nabla J (\beta^{(k)})$ é o gradiente da função custo no ponto
+  $\beta^{(k)}$. O algoritmo exige também um $\beta_0$, que é o chute
+  inicial para o parâmetro. 
+  
+  - O argumento $\alpha_k$ pode ser chamado também de taxa de 
+  aprendizagem, e é importante ser bem selecionado, pois valores 
+  muito pequenos para ele podem tornar o algoritmo lento, enquanto
+  valores grandes podem fazer o método divergir, ou seja, não encontrar
+  o ponto de mínimo. 
+  
+  - Neste método, cada iteração é barata e há garantia de convergência
+  para pelo menos um mínimo local. Todavia, não se pode trabalhar com 
+  equações não-diferenciáveis e o método pode ser lento com grandes 
+  bancos de dados, já que todas as observações da parte de treinamento
+  são usadas em cada iteração. 
+  
+  - Podemos tratar, por exemplo, de uma regressão linear, na qual a 
+  hipótese é:
+  $$h_0(x) = \beta_0  + \beta_1 x$$
+  
+  E a função custo a ser minimizada é descrita como:
+  $$J(\underset{\sim}{\theta}) = \frac{1}{2m} \sum_{i = 1}^{m}
+  (h_{\theta}(x)^{i}) - y^{(i)})^2$$
+  
+  Ou seja, 
+  $$ \nabla J (\beta_j) = \frac{1}{m} \sum_{i = 1}^{m}
+  (h_{\theta}(x)^{i}) - y^{(i)})(x_{j})^{(i)}$$
+  
+  
+```{r, fig.width=10, out.extra = 'style = "margin:0 -200px"'}
+# Função custo
+cust <- function(theta, x, y){
+  m <- length(y)
+  b <- (1/2*m)*sum((x%*% theta) - y)^2
+  return(b)
+} 
+
+# Exemplo--------------------------------------------------------------
+x <- cbind(rep(1, length(iris$Sepal.Width)), iris$Sepal.Width)
+y <- iris$Petal.Length 
+
+# Coeficientes objetivo
+coef(lm(iris$Petal.Length  ~ iris$Sepal.Width))
+
+
+# Custo para valores de theta = 0.1 e 0.5
+cust(x = x, y = y, theta = c(0.1, 0.5))
+#----------------
+# Gradiente da função custo: primeira derivada em relação aos betas
+d.beta <- function(x, y, theta){
+  m <- length(y)
+  d <- (1/m)* (t(x) %*% ((x %*% theta) - y))
+  return(t(d))
+  }
+
+d.beta(x = x, y = y, theta = c(0.1, 0.5))
+
+# Gradiente descendente batch
+gd <- function(x, maxit, alpha = 0.01, theta = c(0, 0),...){
+  h <- matrix(NA, nrow = maxit, ncol = length(theta))
+  custo <- c()
+  for(i in 1:maxit){
+    theta <- theta - t(alpha*d.beta(x, y, theta))
+    h[i, ] <- t(theta)
+    custo[i] <- cust(x = x, y = y, theta = as.vector(theta))
+    }
+  return(list(theta, h, custo))
+  }
+
+gd(x = x, y = y, maxit = 1000)[[1]]
+gd(x = x, y = y, maxit = 10000)[[1]]
+p3 <- gd(x = x, y = y, maxit = 100000) # Convergência Atingida
+p3[[1]]
+
+# Demonstração de algumas tentativas do algoritmo
+plot(iris$Petal.Length  ~ iris$Sepal.Width, xlab = "x",
+     ylab = "y")
+for(i in c(1, 3, 6, 10, 14, seq(20, 10000, 10))){ abline(
+  p3[[2]][i,], col = "turquoise")}
+abline(p3[[1]], col = 2, lwd = 3)
+
+
+# Comportamento da função custo
+par(mfrow = c(1, 2))
+plot(p3[[3]]~ p3[[2]][, 1], col = 3, 
+     xlab = expression("Valores para "~theta[0]),
+     ylab = "Valores da função custo")
+plot(p3[[3]]~ p3[[2]][, 2], col = 4,
+     xlab = expression("Valores para "~theta[1]),
+     ylab = "Valores da função custo")
+```
+
+## Stochastic
+
+   - Outra opção é o método do gradiente estocástico. Neste caso, 
+   utiliza-se apenas uma observação em cada iteração. Ou seja, cada 
+   passo é a realização de uma variável aleatória.
+   $$\beta^{(k+1)} = \beta^{(k)} + \alpha_k \nabla J (\beta^{(k)}; 
+   x_i, y_i)$$
+   
+   - Aqui, a taxa de aprendizagem $\alpha$ é tipicamente menor que 
+   para o caso *batch*. Isso porque existe uma maior variância nas 
+   atualizações. Este método também tem convergência mais rápida para
+   grandes bancos de dados e é possível escapar de um mínimo local. 
+```{r, fig.width=10, out.extra = 'style = "margin:0 -200px"'}
+gds <- function(x, maxit, alpha = 0.01, theta = c(0, 0),...){
+  h <- matrix(NA, nrow = maxit, ncol = length(theta))
+  custo <- c()
+  m <- length(y)
+  
+  the <- as.matrix(cbind(rep(theta[1], maxit), rep(theta[2], maxit)))
+  
+  for(i in 2:maxit){
+    #------ Amostragem
+    s <- sample.int(m, 1)
+    xx <- x[s, 2]
+    yy <- y[s]
+    
+    the[i, 1] <- (the[i-1, 1] - alpha*(the[i-1, 1] + 
+                                         the[i-1, 2]*xx - yy))
+    the[i, 2] <- (the[i-1, 2] - alpha*(xx*(the[i-1, 1] + 
+                                             the[i-1, 2]*xx - yy)))
+    
+    custo[i] <- cust(x = xx, y = yy, theta = as.vector(the[i, ]))
+    }
+  return(list(the, custo))
+  }
+
+pp <- gds(x = x, y = y, maxit = 100000)
+
+par(mfrow = c(1, 2))
+plot(pp[[1]][,1], col = "turquoise", type = "l", 
+     ylab = expression("Valores para "~theta[0]),
+     xlab = "Iteração")
+plot(pp[[1]][,2], col = "tomato", type = "l", 
+     ylab = expression("Valores para "~theta[1]), xlab = "Iteração")
+```
+
+
+## Boosting
+  - Aqui, queremos minimizar a mesma função custo de anteriormente, 
+ou seja: 
+  $$J(\underset{\sim}{\theta}) = \frac{1}{2m} \sum_{i = 1}^{m}
+  (h_{\theta}(x)^{i}) - y^{(i)})^2$$
+
+Cuja derivada em relação a $h_{\theta}(x)$ é:
+
+$\frac{\partial J(\underset{\sim}{\theta})}{\partial h_{\theta}(x)} = 
+h_{\theta}(x) - y$
+
+Isto é o mesmo que dizer que:
+$Resíduos = - \frac{\partial J(\underset{\sim}{\theta})}{\partial h_{\theta}(x)}$
+
+  - Logo, atualizar $h_{\theta}(x)$ com os resíduos é equivalente a 
+  atualizar com o negativo do gradiente. A ideia é, então, encontrar
+  o negativo do gradiente, e ajustar um modelo de regressão 
+  $g(x_i)^{(k)}$ baseado nesse valor:
+  $$ h(x_i)^{(k+1)} = h(x_i)^{(k)} + \rho g(x_i)^{(k)}$$
+  
+  Até a convergência. 
+
+```{r}
+library(mboost)
+mb <- glmboost(iris$Petal.Length  ~ iris$Sepal.Width)
+coefficients(mb, off2int = TRUE)
+
+plot(mb, off2int = TRUE, col = "turquoise", lwd = 2, 
+     main = "Convergência dos parâmetros")
+```
+

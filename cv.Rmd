@@ -1,0 +1,227 @@
+---
+title: "Validação Cruzada"
+author: "Bruna Wundervald"
+output:
+  rmarkdown::html_vignette:
+    fig_width: 5
+    fig_height: 3.5
+    fig_cap: TRUE
+    toc: yes
+---
+<style type="text/css">
+#TOC {
+  margin: 0 130px;
+  width: 425px;
+}
+</style>
+```{r setup, include = FALSE}
+require(knitr)
+opts_chunk$set(
+    dpi = 100,
+    fig.align = "center",
+    comment = NA,
+    message = FALSE,
+    warning = FALSE,
+    error = FALSE)
+```
+
+# Definição
+  - Na falta de uma grande base de dados de teste, utilizados para 
+  estimar a taxa de erro do algoritmo, algumas técnicas podem ser 
+  aplicadas para quantificar esta taxa usando os próprios dados
+  disponíveis para treino. Uma destas técnicas é a validação cruzada.
+  Ela consiste em calcular a taxa de erro em um certo subconjunto dos
+  dados de treino, separado previamente, ou seja, que não participa
+  do aprendizado do algoritmo. 
+
+## Holdout
+  - A técnica conhecida como *holdout* consiste na divisão dos dados
+  em  treino e validação, dada alguma proporção pré-definida, como 
+  *80-20* (80% dos dados para treino e 20% para validação) ou *70-30*. 
+  O algoritmo aprende com o subconjunto de treino e o restante dos dados
+  é usado para predição. O erro proveniente dos dados de validação 
+  fornece uma estimativa do erro de teste, que é normalmente quantificado
+  pelo **erro quadrático médio** para variáveis contínuas e pela **taxa
+  de classificação incorreta** no caso de variáveis discretas. 
+  
+## K-fold
+  - A técnica de validação cruzada chamada de "k-fold" ('k dobras') é 
+  quando faz-se a divisão dos dados de treino em *k* partes iguais, 
+  reservando *k-1* partes para o treino e *1* parte para o cálculo da
+  medida de erro. Este processo é feito para cada uma das *k* partes, 
+  isto é, todas as partes passam pelo estado de "treino" e "validação", 
+  e os *k* resultados obtidos para o erro são combinados através de:
+  $$ CV_{k} = \sum_{k = 1}^{K} \frac{n_k}{n} EQM_k,$$
+  Com  $EQM_k = \sum_{i \in C_k} \frac{(y_i - \hat y_i)^2}{n_k}$, para 
+  o caso de variáveis contínuas e:
+  
+  $$ CV_{k} = \sum_{k = 1}^{K} \frac{n_k}{n} Err_k,$$
+  
+  Onde $Err_k = \sum_{i \in C_k} \frac{(y_i \neq \hat y_i)}{n_k}$, para
+  quando a variável é discreta, representando a taxa de classificação 
+  incorreta. 
+  
+  - O caso específico de *n-fold* é conhecido como Leave-One-Out. Este 
+  nome vem de que em cada etapa do processo, apenas uma observação é 
+  deixada de fora do treino. 
+  
+# Exemplo de Utilização
+## Validação cruzada para encontrar o $\lambda$ ótimo na utilização de suavizadores por Kernel. 
+
+### Suavizadores por Kernel
+  - Problemas que envolvem modelagem são aqueles nos quais temos 
+  interesse em estimar a relação entre uma ou mais variáveis *resposta*,
+  denotadas por $y$ e uma ou mais variáveis explicativas $x$. Uma
+  das abordagens possíveis na resolução deste tipo de problema é a 
+  suavização de uma curva por Kernel. 
+  
+  - Em geral, um Kernel suavizador define um conjunto de pesos 
+  ${W_i(x)}_{i=1}^{n}$ para cada $x$, e
+  $$ \hat f(x) = \sum_{i = 1}^{n} W_i(x) y_i.$$
+  
+  - Para um Kernel suavizador, temos que a sequência de pesos
+  ${W_i(x)}_{i=1}^{n}$ é representada ao descrever a forma da função
+  de pesos $W_i(x)$ por uma função de densidade, com um parâmetro de
+  escala que ajusta o tamanho e forma dos pesos perto de $x$. Assim, 
+  refere-se à essa função de forma como um *kernel K*, onde:
+  $$ \int K(u)d(u) = 1.$$
+  
+  - O parâmetro de escala denominado por $\lambda$ produz a sequência
+  de pesos:
+  $$ W_{hi}(x) = \frac{K \frac{(x - x_i)}{\lambda}} {\sum_{i = 1}^{n} K \frac{(x - x_i)}{\lambda}} $$
+  
+  - É crucial para a performance do estimador que a largura de banda, ou
+  $\lambda$, seja bem definida. Uma das abordagens mais utilizadas
+  para encontrar este valor é a LOOCV (Leave-One-Out Cross Validation), 
+  de forma a minimizar: 
+  $$ EQ = \sum_{i = 1}^{n} (y_i - \hat f(x_i))^2 + \lambda \int \hat f''(x_i) dx$$
+  
+  
+```{r, fig.width=10, fig.align='right'}
+library(labestData)
+library(lattice)
+library(latticeExtra)
+
+da <- data.frame(y = PaulaEx1.13.19$renda,
+                 x = PaulaEx1.13.19$estud)
+
+# Qual o valor ótimo para o lambda?
+p1 <- xyplot(y ~ x, data = da, type = c("p", "g"),
+             col = "pink3", xlab = "x - renda",
+             ylab = "y - tempo de estudo",
+             pch = 16,
+             main = expression(lambda~"=1"))+
+  layer(panel.lines(ksmooth(da$x, da$y, "normal", 1),
+                    lwd = 2,
+                    col = "turquoise"))
+
+p2 <- xyplot(y ~ x, data = da, type = c("p", "g"),
+             col = "pink3", xlab = "x - renda",
+             ylab = "y - tempo de estudo",
+             pch = 16, 
+             main = expression(lambda~"=1.5"))+
+  layer(panel.lines(ksmooth(da$x, da$y, "normal", 1.5),
+                    lwd = 2,
+                    col = "turquoise"))
+
+p3 <- xyplot(y ~ x, data = da, type = c("p", "g"),
+             col = "pink3", xlab = "x - renda",
+             ylab = "y - tempo de estudo",
+             pch = 16,
+             main = expression(lambda~"=2"))+
+  layer(panel.lines(ksmooth(da$x, da$y, "normal", 2),
+                    lwd = 2,
+                    col = "turquoise"))
+
+
+print(p1, position = c(0, 0, 1/3, 1), more = TRUE)
+print(p2, position = c(1/3, 0, 2/3, 1), more = TRUE)
+print(p3, position = c(2/3, 0, 1, 1))
+
+#---------------------
+(n <- nrow(da))
+k <- 5
+
+da$i <- ceiling((1:n)/(n/k))
+
+# Parte os dados em k conjuntos disjuntos.
+das <- split(da, f = da$i)
+
+cen <- expand.grid(fold = 1:k,
+                   l = 3:250)
+
+kfol <- mapply(f = cen$fold,
+               d = cen$l,
+               FUN = function(f, d) {
+                   j <- da$i != f
+
+                   b <- ksmooth(subset(da, j)$x, 
+                                subset(da, j)$y, 
+                                "normal", bandwidth = d)
+
+                   # Erro de treinamento
+                   cvt <- sum((subset(da, j)$y - b$y)^2, 
+                              na.rm = TRUE)/length(subset(da, j)$y)
+                  #--------------------  
+                  # Erro de validação
+                   p <- b$y[which.min(abs(b$x-das[[f]]$x))]
+                   cvval <- crossprod((das[[f]]$y -
+                                        p)^2)/length(das[[f]]$y)
+                   return(c(cvt = cvt, cvval = cvval))
+               })
+
+kfol <- cbind(cen, as.data.frame(t(kfol)))
+str(kfol)
+
+xyplot(cvt + cvval ~  l, groups = fold , data = kfol,
+       auto.key = list(corner = c(0.95, 0.95)), 
+       type = c("p", "g", "o"),
+       scales = "free")
+
+#-------------
+which.min(kfol$cvval)
+kfol[5,] # lambda = 3
+#-----------------------------------------------------------------------
+# leave-one-out 
+
+# Cenários
+cen <- expand.grid(fold = 1:n,
+                   l = 3:15)
+
+# Obtendo os erros para cada cenário
+nfol <- mapply(f = cen$fold,
+               d = cen$l,
+               FUN = function(f, d) {
+                 # browser()
+                 b <- ksmooth(da[-f,]$x,
+                                da[-f,]$y,
+                                "normal", bandwidth = d)
+
+                   # Erro de treinamento
+                   cvt <- sum((da[-f]$y - b$y)^2,
+                              na.rm = TRUE)/length(da[-f]$y)
+                  #--------------------
+                  # Erro de validação
+                   p <- b$y[which.min(abs(b$x-da[f, ]$x))]
+                  
+                   cvval <- (p - da$y[f])^2
+                   return(c(cvt = cvt, cvval = cvval))
+
+               })
+
+nfol <- cbind(cen, as.data.frame(t(nfol)))
+which.min(nfol$cvval)
+nfol[585,] # lambda = 14
+
+xyplot(cvt + cvval ~  l, groups = fold , data = nfol,
+       type = c("p", "g", "o"),
+       scales = "free")
+
+
+```
+
+
+  - Conclusão: Percebemos, para ambos os métodos, uma estabilização
+  do valor de $\lambda$ que pode ser observada com os gráficos sobre
+  os erros na amostra de validação. Isto é, existe um $\lambda$ ótimo, 
+  a partir do qual o erro de validação é o menor possível. 
