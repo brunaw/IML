@@ -1,0 +1,275 @@
+---
+title: "Regularização"
+author: "Bruna Wundervald"
+output:
+  rmarkdown::html_vignette:
+    fig_width: 5
+    fig_height: 3.5
+    fig_cap: TRUE
+    toc: yes
+    css: style.css
+---
+<style type="text/css">
+#TOC {
+  margin: 0 130px;
+  width: 425px;
+}
+</style>
+```{r setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+    dpi = 100,
+    fig.align = "center",
+    comment = NA,
+    message = FALSE,
+    warning = FALSE,
+    error = FALSE)
+```
+
+## Regularização
+
+  - Quando utilizamos métodos de regressão, podemos nos deparar com 
+  bancos de dados que possuem muitas covariáveis em relação à 
+  quantidade de observações. Uma suposição que pode ser feita é a de 
+  que algumas dessas variáveis tem um alto poder de predição. Assim, 
+  um bom método para trabalhar com esse problema é **regular** a 
+  entrada de vairiáveis em um modelo, eliminando-as ou impondo
+  pesos/penalidade nas entradas. 
+  
+  - A ideia de utilizar penalidades é aplicada através e **Multiplicadores
+  de Lagrange**:
+  
+  $$min_{\beta} \sum_{i = 1}^{n}\Big(y_i - \beta_0  - \sum_{j = 1}^{p}
+  \beta_j x_{ij} \Big)^{2} + \lambda P(\beta)$$
+  
+  Onde $P(\beta)$ faz o papel de penalidade, mantendo as estimativas de
+  $\beta_j$ perto de 0. Utilizando a família das potências, temos:
+  
+  $$min_{\beta} \sum_{i = 1}^{n}\Big(y_i - \beta_0  - \sum_{j = 1}^{p}
+  \beta_j x_{ij} \Big)^{2} + \lambda \sum_{j = 1}^{p} |\beta_j|^q$$
+  
+  Ou seja, quanto maior é o valor absoluto do coeficiente, mais 
+  penalidade é atribuída à ele. Consideramos $\lambda$ como o parâmetro
+  de *tuning*. 
+
+### Penalização Ridge
+
+   - Neste caso, o objetivo é otimizar:
+   
+  $$min_{\beta} \sum_{i = 1}^{n}\Big(y_i - \beta_0  - \sum_{j = 1}^{p}
+  \beta_j x_{ij} \Big)^{2} + \lambda \sum_{j = 1}^{p} \beta_j^2$$
+  
+  - A ideia é somar uma constante $\lambda$ à diagonal da matriz se
+  $p > n$, solucionando o problema da singularidade:
+  
+  $$ \hat \beta = (\mathbf X^T \mathbf X + \lambda \mathbf I)^{-1} 
+  \mathbf X^T \mathbf y$$
+  
+   Notar que $\hat \beta_{\lambda}^{R} = \frac{\hat \beta^{OLS}}{
+   1 + \lambda}$, caracterizando algo importante na regressão *ridge*:
+   o "encolhimento" dos parâmetros. 
+
+
+### Penalização Lasso
+
+   - Agora, o objetivo é otimizar:
+   
+  $$min_{\beta} \sum_{i = 1}^{n}\Big(y_i - \beta_0  - \sum_{j = 1}^{p}
+  \beta_j x_{ij} \Big)^{2} + \lambda \sum_{j = 1}^{p} |\beta_j|$$
+   
+   
+### Elastic Net
+
+   - A *Elastic Net* é basicamente a combinação entre os métodos
+   *Lasso* e *Ridge*:
+   
+  $$min_{\beta} \sum_{i = 1}^{n}\Big(y_i - \beta_0  - \sum_{j = 1}^{p}
+  \beta_j x_{ij} \Big)^{2} + \lambda \sum_{j = 1}^{p} 
+  \Big(\alpha |\beta_j| + (1 - \alpha) \beta^{2}_j \Big)$$
+
+
+### Selecionando $\lambda$ ótimo
+  
+  - Assim como em outros métodos de *Machine Learning*, utiliza-se 
+  validação cruzada para encontrar um parâmetro ótimo, que neste caso
+  é o $\lambda$. Os passos para isso são:
+    1. Avaliar a taxa de erro de classificação para um certo *grid*
+    de $\lambda$; 
+    2. Verificar qual dos $\lambda$ testados produz a menor taxa de erro; 
+    3. Ajustar o novo modelo com todas as observações e o $\lambda$ 
+    ótimo. 
+
+### Exemplos
+
+```{r}
+set.seed(20172)
+# Carregamento de pacotes
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(glmnet)
+library(glmnetUtils)
+
+# Leitura e organização da base:
+# 1. Leitura
+# 2. Filtra apenas quem mora no centro e tem renda maior que 0
+# 3. Seleciona apenas as colunas de interesse
+# 4. Transforma algumas colunas em fator e decide quem fará parte da 
+# amostra de treino e da de teste
+
+db <- read.csv("dados2.txt", 
+               header = TRUE, 
+               sep = "\t",
+               encoding = "UTF-8") %>% 
+  filter(nom_localidade_fam == "CENTRO",
+         vlr_renda_total_fam > 0) %>% 
+  dplyr::select(c(vlr_renda_total_fam,
+                  qtd_comodos_domic_fam, 	qtd_comodos_dormitorio_fam,
+                  cod_material_piso_fam,	cod_material_domic_fam,
+                  cod_agua_canalizada_fam, 	cod_escoa_sanitario_domic_fam,
+                  cod_iluminacao_domic_fam,
+                  cod_calcamento_domic_fam,	
+                  qtd_pessoas_domic_fam,	
+                  val_desp_energia_fam, val_desp_agua_esgoto_fam,	
+                  val_desp_gas_fam,	val_desp_alimentacao_fam,
+                  val_desp_transpor_fam,	val_desp_aluguel_fam)) %>% 
+  dplyr::mutate(cod_material_domic_fam = factor(cod_material_domic_fam),
+                cod_agua_canalizada_fam = factor(cod_agua_canalizada_fam),
+                cod_calcamento_domic_fam = factor(cod_calcamento_domic_fam),
+                cod_escoa_sanitario_domic_fam = factor(cod_escoa_sanitario_domic_fam),
+                part = ifelse(runif(695) > 0.3, "treino", "teste"))
+dim(db)
+
+#-------------------------------------------------------------
+# Regressão Ridge
+#-------------------------------------------------------------
+
+# Amostra de treino
+db.t <- db %>% 
+  filter(part == "treino") %>%
+  dplyr::select(-c(part))
+
+db.te <- db %>% 
+  filter(part == "teste") %>% 
+  dplyr::select(-c(part))
+
+# Modelo linear simples
+m0 <- lm(vlr_renda_total_fam ~ ., data = db.t)
+summary(m0)        
+
+# Aqui, existem evidências a favor da não nulidade dos coecientes
+# para 'qtd_comodos_domic_fam', 'qtd_comodos_dormitorio_fam',
+# 'cod_material_domic_fam', 'val_desp_energia_fam' e 
+# 'val_desp_alimentacao_fam'
+
+# Ridge
+m0.r <- glmnetUtils::cv.glmnet(vlr_renda_total_fam ~ .,
+                               data = db.t,
+                                   alpha = 0)
+
+plot(m0.r)
+
+# O melhor valor de lambda:
+m0.r$lambda.1se
+
+# Coeficientes estimados usando esse lambda
+coef(m0.r, s = "lambda.1se")
+
+# Predição
+pred <- predict(m0.r, db.te, type = "response")
+real <- db %>% filter(part == "teste") %>% with(vlr_renda_total_fam)
+
+ind <- intersect(rownames(pred), 1:length(real))
+
+# Predito x Observado
+data.frame(pred = pred, r = real[ind]) %>%
+  ggplot(aes(x = r, y = pred)) + 
+  geom_point( colour = "turquoise") + 
+  xlab("Dados reais") +
+  ylab("Preditos")
+
+# Soma de quadrados
+sst <- sum((real - mean(real))^2)
+sse <- sum((pred - real[ind])^2)
+
+# R quadrado
+rsq <- 1 - sse / sst
+rsq
+
+#-------------------------------------------------------------
+# Regressão Lasso
+#-------------------------------------------------------------
+m0.l <- glmnetUtils::cv.glmnet(vlr_renda_total_fam ~ .,
+                               data = db.t,
+                                   alpha = 1)
+plot(m0.l)
+# O melhor valor de lambda:
+m0.l$lambda.1se
+
+# O melhor valor de lambda está indicado como 204.5921
+# Coeficientes estimados usando esse lambda
+coef(m0.l, s = "lambda.1se")
+
+# Predição
+pred.l <- predict(m0.l, db.te, type = "response")
+ind <- intersect(rownames(pred.l), 1:length(real))
+
+# Predito x Observado
+data.frame(pred = pred.l, r = real[ind]) %>%
+  ggplot(aes(x = r, y = pred)) + 
+  geom_point( colour = "tomato") + 
+  xlab("Dados reais") +
+  ylab("Preditos")
+
+sse <- sum((pred.l - real[ind])^2)
+
+# R quadrado
+rsq <- 1 - sse / sst
+rsq
+
+#-------------------------------------------------------------
+# Gráfico de perfil dos lambdas
+#-------------------------------------------------------------
+
+lambdas <- seq(0, 300, l = 50)
+sse <- vector(mode = "numeric", length = length(lambdas))
+rsq <- vector(mode = "numeric", length = length(lambdas))
+
+for(i in 1:length(lambdas)){
+  
+  m0 <- glmnetUtils::glmnet(vlr_renda_total_fam ~ .,
+                            data = db.t,
+                            alpha = 0,
+                            lambda = lambdas[i])
+  
+  pred <- predict(m0, db.te, type = "response")
+  ind <- intersect(rownames(pred), 1:218)
+  
+  sse[i] <- sum((pred - real[ind])^2)
+  
+  # R quadrado
+  rsq[i] <- 1 - sse[i] / sst
+}
+
+# R-quadrado x Lambdas
+data.frame(lambdas = lambdas, rsq = rsq) %>%
+  ggplot(aes(x = lambdas, y = rsq)) + 
+  geom_line( colour = "green2") + 
+  geom_vline(aes(xintercept = lambdas[which.max(rsq)]), 
+             linetype = "dashed", size = 2, color = "gray") +
+  annotate("text", x = lambdas[which.max(rsq)] + 10, y = max(rsq), 
+           label = paste("lambda == ", round(lambdas[which.max(rsq)], 2)),
+           parse = TRUE, size = 6)
+
+
+# R-quadrado x sse
+data.frame(lambdas = lambdas, sse = sse) %>%
+  ggplot(aes(x = lambdas, y = sse)) + 
+  geom_line( colour = "yellow") + 
+  geom_vline(aes(xintercept = lambdas[which.min(sse)]), 
+             linetype = "dashed", size = 2, color = "gray") +
+  annotate("text", x = lambdas[which.min(sse)] + 10, y = min(sse), 
+           label = paste("lambda == ", round(lambdas[which.min(sse)], 2)),
+           parse = TRUE, size = 6)
+
+```
