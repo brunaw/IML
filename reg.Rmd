@@ -243,7 +243,7 @@ for(i in 1:length(lambdas)){
                             lambda = lambdas[i])
   
   pred <- predict(m0, db.te, type = "response")
-  ind <- intersect(rownames(pred), 1:218)
+  ind <- intersect(rownames(pred), 1:length(real))
   
   sse[i] <- sum((pred - real[ind])^2)
   
@@ -258,18 +258,18 @@ data.frame(lambdas = lambdas, rsq = rsq) %>%
   geom_vline(aes(xintercept = lambdas[which.max(rsq)]), 
              linetype = "dashed", size = 2, color = "gray") +
   annotate("text", x = lambdas[which.max(rsq)] + 10, y = max(rsq), 
-           label = paste("lambda == ", round(lambdas[which.max(rsq)], 2)),
+           label = paste("lambda == ", round(lambdas[which.max(rsq)], 1)),
            parse = TRUE, size = 6)
 
 
-# R-quadrado x sse
+# Lambdas x sse
 data.frame(lambdas = lambdas, sse = sse) %>%
   ggplot(aes(x = lambdas, y = sse)) + 
   geom_line( colour = "yellow") + 
   geom_vline(aes(xintercept = lambdas[which.min(sse)]), 
              linetype = "dashed", size = 2, color = "gray") +
   annotate("text", x = lambdas[which.min(sse)] + 10, y = min(sse), 
-           label = paste("lambda == ", round(lambdas[which.min(sse)], 2)),
+           label = paste("lambda == ", round(lambdas[which.min(sse)], 1)),
            parse = TRUE, size = 6)
 
 ```
