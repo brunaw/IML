@@ -304,3 +304,5 @@ caption{display:table-caption;font-weight:300;font-size:1.3em;text-transform:upp
     font-size: 0.8rem;
 }
 
+div.outer { position: relative; height: 24px; }
+div.outer img { position: absolute; right: 0; bottom: 0; }

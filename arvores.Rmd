@@ -1,0 +1,305 @@
+---
+title: "Árvores de Decisão"
+output:
+  rmarkdown::html_vignette:
+    fig_width: 5
+    fig_height: 3.5
+    fig_cap: TRUE
+    toc: yes
+    css: style.css
+header-includes:
+  - \usepackage{mathtools}
+---
+
+<style type="text/css">
+#TOC {
+  margin: 0 130px;
+  width: 425px;
+}
+</style>
+</style>
+<div class="outer">
+<img src="./logo1.png" width="150px" display="block">
+</div>
+<b>
+<center>
+<a href="https://brunaw.github.io/"> Bruna Wundervald </a><br/>
+<code>brunadaviesw at gmail.com</code><br/>
+Departamento de Estatística - UFPR
+</center>
+</b>
+</div>
+</div>
+
+```{r setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+    dpi = 100,
+    fig.align = "center",
+    comment = NA,
+    message = FALSE,
+    warning = FALSE,
+    error = FALSE)
+```
+
+
+# Introdução
+
+  - Métodos de árvores envolvem encontrar um conjunto de "regras de 
+  divisão", usadas na segmentação do espaço da variável preditora.
+  Estes métodos podem tanto ser aplicados à problemas de regressão
+  ou classificação. 
+  
+## Árvores de Regressão
+
+  Em resumo, para a construção de árvores de regressão são necessários
+  2 passos:
+  
+  1. O espaço da variável preditora é dividido em $J$ regiões distintas,
+  de forma que ela não se sobreponham, $R_1, R_2...R_J$. 
+  
+  2. Para cada observação que estiver na região $R_j$, é feita a mesma
+  predição, que na verdade é apenas a média dos pontos presentes em
+  $R_j$. 
+  
+Assim, após obtidas as regiões, as predições das observações delas
+serão a média dos pontos em cada região. Por exemplo, caso seja 
+obtida a uma primeira região $R_1$, e a média dos pontos nesta região
+seja 10, os valores preditos das observações que cairem nela 
+valerão 10, e assim sucessivamente. Mas como encontrar as regiões 
+ótimas? 
+
+  - O objetivo é encontrar regiões em formato de "caixas" que minimizem
+  a soma dos quadrados dos resíduos, ou seja:
+  $$ \sum_{j = 1}^{J} \sum_{y \in R_j} (y_i - \hat y_{R_j})^2 $$ 
+
+### Partições ótimas  
+
+Na prática, é computacionalmente inviável realizar todas as partições
+possíveis em $J$ caixas. Por esse motivo, é considerada a abordagem
+da divisão binária recursiva. Começando no topo da árvore, onde 
+todas as observações pertencem a uma mesma região, são feitas divisões
+sucessivas no espaço das preditoras, sendo que cada divisão gera
+dois novos ramos abaixo da árvore. 
+
+Em cada passo, a divisão feita considera apenas o estado atual da 
+árvore, e não situações futuras. Estas divisões selecionam, 
+primeiramente, a variável preditora $X_j$, e o ponto de corte que leva 
+à maior reduçãos na SQR. A seguir, as divisões continuam sendo 
+feitas, mas sempre partindo das anteriores, e não mais da região
+que contém todos os pontos. O processo continua até algum critério de
+parada ser atingido. 
+
+### Podagem de árvores
+
+  - Uma estratégia adotada quando são construídas árvores de regressão
+  é chegar em uma grande árvore e ir podando. O objetivo é selecionar
+  uma sub-árvore que dê o menor erro na amostra de validação. Como
+  fazer isso para todas as sub-aŕvores possíveis não é prático, 
+  um subconjunto delas é selecionado. É considerada uma sequência
+  de árvores indexadas por um parâmetro de tuning $\alpha$. Cada
+  valor de $\alpha$ corresponde a uma sub-árvore $ T \subset T_0$
+  tal que:
+
+  $$ \sum_{m = 1}^{|T|} \sum_{i: x_i \in R_m} (y_i - \hat y_{R_m})^2
+  + \alpha |T| $$ 
+
+  Seja o menor possível. Basicamente, o $\alpha$ controla o *trade-off*
+  entre a complexidade da sub-árvore e seu ajuste aos dados de 
+  treinamento. Isto é, quando $\alpha$ é grande, existe uma penalização
+  pela sua quantidade de nós terminais. 
+  
+```{r}
+set.seed(20172)
+# Carregamento de pacotes
+library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(gridExtra)
+
+# Leitura e organização da base:
+# 1. Leitura
+# 2. Filtra apenas quem mora no centro e tem renda maior que 0
+# 3. Seleciona apenas as colunas de interesse
+# 4. Transforma algumas colunas em fator e decide quem fará parte da 
+# amostra de treino e da de teste
+
+db <- read.csv("/home/bruna/GIT/Machine Learning/Dados/dados2.txt", 
+               header = TRUE, 
+               sep = "\t",
+               encoding = "UTF-8") %>% 
+  filter(val_desp_aluguel_fam >  0) %>% 
+  dplyr::select(c("endereco", "val_desp_aluguel_fam", 
+             "qtd_comodos_domic_fam", "qtd_comodos_dormitorio_fam",
+             "cod_material_piso_fam", "cod_material_domic_fam",
+             "cod_iluminacao_domic_fam",
+             "qtd_pessoas_domic_fam")) %>% 
+  dplyr::mutate(cod_iluminacao_domic_fam = factor(cod_iluminacao_domic_fam),
+                cod_material_domic_fam = factor(cod_material_domic_fam),
+                cod_material_piso_fam = factor(cod_material_piso_fam))
+dim(db)
+
+getFactor <- function(x) {
+   x <- na.omit(x)
+   tb <- table(x)
+   nm <- names(tb)[tb == max(tb)]
+   return(sample(nm, 1))
+}
+
+db.aj <- db %>%  dplyr::group_by(factor(endereco)) %>% 
+  dplyr::summarise(total.count = n(), 
+                   m.aluguel = mean(val_desp_aluguel_fam, na.rm=TRUE),
+                   max.dorm = max(qtd_comodos_dormitorio_fam, na.rm=TRUE),
+                   max.com = max(qtd_comodos_domic_fam, na.rm=TRUE),
+                   max.pessoas = max(qtd_pessoas_domic_fam, na.rm = TRUE),
+                   piso = getFactor(cod_material_piso_fam),
+                   material = getFactor(cod_material_domic_fam),
+                   ilum = getFactor(cod_iluminacao_domic_fam)) %>%  
+  filter(m.aluguel < 3000, max.com > 0) %>% 
+  dplyr::mutate(part = ifelse(runif(3945) > 0.3, "treino", "teste"))
+
+names(db.aj)
+dim(db.aj)
+
+
+# Descritiva das variáveis
+p1 <- ggplot(data = db.aj, 
+       aes(y = m.aluguel, x = factor(material))) +
+  geom_boxplot(aes(fill = factor(material)), colour = "ivory4") +
+  xlab("Tipo de material") +
+  ylab("Aluguel") +
+  guides(fill=FALSE)
+
+
+p2 <- ggplot(data = db.aj, 
+             aes(y = m.aluguel, x = factor(piso))) +
+  geom_boxplot(aes(fill = factor(piso)), colour = "ivory4") +
+  xlab("Tipo de piso") +
+  ylab("Aluguel") +
+  guides(fill=FALSE)
+
+p3 <- ggplot(data = db.aj, 
+             aes(y = m.aluguel, x = factor(ilum))) +
+  geom_boxplot(aes(fill = factor(ilum)), colour = "ivory4") +
+  xlab("Tipo de iluminação") +
+  ylab("Aluguel") +
+  guides(fill=FALSE)
+
+p4 <- ggplot(data = db.aj, 
+             aes(y = m.aluguel, x = max.dorm)) +
+  geom_boxplot(aes(fill = factor(max.dorm)), colour = "ivory4") +
+  xlab("Quantidade de dormitórios") +
+  ylab("Aluguel") +
+  guides(fill=FALSE)
+
+p5 <- ggplot(data = db.aj, 
+             aes(y = m.aluguel, x = factor(max.com))) +
+  geom_boxplot(aes(fill = factor(max.com)), colour = "ivory4") +
+  xlab("Quantidade de dormitórios") +
+  ylab("Aluguel") +
+  guides(fill=FALSE)
+
+p6 <- ggplot(data = db.aj, 
+             aes(x = 1, y = m.aluguel)) +
+  geom_boxplot(fill = "tomato", colour = "ivory4") +
+  ylab("Aluguel") +
+  xlab("") + 
+  guides(fill=FALSE)
+
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+multiplot(p1, p2, p3, p4, p5, p6, cols = 3) 
+#-------------------------------------------------------------
+# Àrvores de Regressão
+#-------------------------------------------------------------
+library(rpart)
+library(rpart.plot)
+# Separação em treino e teste
+db.teste <- db.aj %>% filter(part == "teste")
+db.treino <- db.aj %>% filter(part == "treino")
+
+
+t1 <- rpart(m.aluguel ~ max.dorm + max.com + max.pessoas + 
+             piso + material + ilum, data = db.treino)
+summary(t1)
+
+rpart.plot(t1, main = 'Árvore de regressão')
+
+
+p1 <- predict(t1, newdata = db.teste)
+(sqr <- sum(db.teste$m.aluguel - p1))
+
+# Diversas Arvóres
+
+alp <- seq(0, 1, l = 100)
+sqr <- numeric(100)
+p <- numeric(100)
+
+for(i in 1:100){
+  m <- rpart(m.aluguel ~ max.dorm + max.com + max.pessoas + 
+             piso + material + ilum, data = db.treino,
+             control = rpart.control(cp = alp[i]))
+  
+  p[i] <- predict(m, newdata = db.teste)
+  sqr[i] <- sum(db.teste$m.aluguel - p)
+}
+
+
+alp[which.min(sqr)]
+# A árvore que dá a menor sqr é aquela com mais nós
+
+alp <- seq(0, 1, l = 1000)
+sqr <- numeric(1000)
+p <- numeric(1000)
+
+for(i in 1:1000){
+  m <- prune.rpart(t1, cp = alp[i])
+  
+  p[i] <- predict(m, newdata = db.teste)
+  sqr[i] <- sum(db.teste$m.aluguel - p)
+}
+
+alp[which.min(sqr)]
+
+m <- prune.rpart(t1, cp = 0.01)
+plot(density(sqr))
+p <- predict(m, newdata = db.teste)
+# printcp(t1)
+```
+
