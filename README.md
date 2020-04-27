@@ -1,13 +1,12 @@
-# Introdução ao Machine Learning - 2017/2 
-## Universidade Federal do Paraná
+# Introduction to Machine Learning - 2017/2 
+## Federal University of Paraná
 
-> Repositório de Atividades
+> Activities
 
-+ Validação Cruzada
-  + [Material](https://brunaw.github.io/ML/cv.html)
+- [Cross Validation](http://brunaw.com/IML/cross-validation/cv.html)
 
-+ Gradiente Descent
-  + [Batch, Stochastic e Boosting](https://brunaw.github.io/ML/grad.html)
-  
-+ Regularização 
-  + [Regressão Ridge e Lasso](https://brunaw.github.io/ML/reg.html)
+- [Trees](http://brunaw.com/IML/trees/arvores.html)
+
+- [Gradient Descent](http://brunaw.com/IML/gradient-descent/grad.html)
+
+- [Regularization](http://brunaw.com/IML/regularization/reg.html)
